@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<link rel="stylesheet" href="nvidia_uploader.css" />
+</head>
+
+<body>
+
+	<script src="image-renderer-lib.js"></script>
+	<script src="png.js"></script>
+	<script src="exif.js"></script>
+	<script src="nvidia_uploader.js"></script>
+
+	<div id="upload-modal">
+		<div class="text">
+			<label style="display: block;">User ID</label>
+			<input style="display: block;width: 100%;max-width: 100%;" type="text" e1-value="@UploadService.userId">
+		</div>
+		<div class="text">
+			<label style="display: block;">Session token</label>
+			<input style="display: block;width: 100%;max-width: 100%;" type="text" e1-value="@UploadService.session">
+		</div>
+		<div class="text">
+			<span>Upload your NVIDIA Ansel screenshot below</span>
+		</div>
+		<e1-upload-zone file="@UploadService.file" content="@UploadService.content" validator="@UploadService.addFile"></e1-upload-zone>
+	</div>
+
+	<e1-modal content="@MessageService.modal.content" active="@MessageService.modal.active"></e1-modal>
+	
+	<e1-message message="@MessageService.message.message" active="@MessageService.message.active" icon="@MessageService.message.icon"
+	 type="@MessageService.message.type" buttons="@MessageService.message.buttons"></e1-message>
+</body>
+
+</html>
