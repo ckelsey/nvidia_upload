@@ -10065,7 +10065,6 @@ function () {
         type = "Stereo";
       }
 
-      console.log(type);
       E1.setModel(null, "@MessageService.modal", {
         active: true,
         clss: "imageModal",
@@ -10082,13 +10081,11 @@ function () {
 
       x.onload = function (res) {
         var res = JSON.parse(x.responseText);
-        console.log(res);
 
         if (res && res.Items) {
           var container = window.document.getElementById("images");
           res.Items.forEach(function (element) {
             var html = "<div class=\"image\" onclick=\"E1.services.App.showImage('".concat(element.id, "')\"><img src=\"").concat(element.thumbnailImage, "\"></div>");
-            console.log(html);
             container.appendChild(E1.cleanHtml(html));
             _this.images[element.id] = element;
           });

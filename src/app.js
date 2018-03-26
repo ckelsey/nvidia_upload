@@ -26,8 +26,6 @@ class App {
             type = `Stereo`
         }
 
-        console.log(type)
-
         E1.setModel(null, "@MessageService.modal", {
             active: true,
             clss: `imageModal`,
@@ -45,14 +43,12 @@ class App {
         x.open("GET", this.imagesUrl, false)
         x.onload = (res) => {
             var res = JSON.parse(x.responseText)
-            console.log(res)
 
             if (res && res.Items) {
                 var container = window.document.getElementById(`images`)
 
                 res.Items.forEach(element => {
                     var html = `<div class="image" onclick="E1.services.App.showImage('${element.id}')"><img src="${element.thumbnailImage}"></div>`
-                    console.log(html)
                     container.appendChild(E1.cleanHtml(html))
                     this.images[element.id] = element
                 });
