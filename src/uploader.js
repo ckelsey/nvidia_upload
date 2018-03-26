@@ -28,6 +28,7 @@ class Uploader {
         this.cropOptions = cropOptions
         this.progressCB = progressCB
         this.bytesPerChunk = 647212
+        this.stop = false
     }
 
     run() {
@@ -71,6 +72,9 @@ class Uploader {
 
     uploadChunk(index) {
         return new Promise((resolve, reject) => {
+            if (this.stop){
+                resolve()
+            }
 
             if (!this.urls[index]) {
                 return reject(`No url`)
@@ -130,6 +134,10 @@ class Uploader {
 
     stitch() {
         return new Promise((resolve, reject) => {
+            if (this.stop) {
+                resolve()
+            }
+
             var params = {
                 directory: this.urls.directory,
                 ext: this.ext,
@@ -161,6 +169,10 @@ class Uploader {
 
             x.send(JSON.stringify(params))
         })
+    }
+
+    cancel(){
+        this.stop = true
     }
 
     upload() {

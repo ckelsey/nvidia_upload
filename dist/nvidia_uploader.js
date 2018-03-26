@@ -84,6 +84,8 @@ __webpack_require__(13);
 
 __webpack_require__(14);
 
+__webpack_require__(16);
+
 /***/ }),
 /* 1 */
 /***/ (function(module, exports) {
@@ -934,8 +936,8 @@ var e1jsComponents = function (t) {
         O = n(50),
         F = n(57),
         I = n(85),
-        z = n(44),
-        N = n(54),
+        N = n(44),
+        z = n(54),
         H = n(38),
         R = n(84),
         j = n(108),
@@ -1054,7 +1056,7 @@ var e1jsComponents = function (t) {
         It = function It() {
       return dt.apply(Ft ? ft.call(Et(this)) : Et(this), arguments);
     },
-        zt = {
+        Nt = {
       copyWithin: function copyWithin(t, e) {
         return j.call(Et(this), t, e, arguments.length > 2 ? arguments[2] : void 0);
       },
@@ -1117,7 +1119,7 @@ var e1jsComponents = function (t) {
         return new (F(n, n[mt]))(n.buffer, n.byteOffset + r * n.BYTES_PER_ELEMENT, g((void 0 === e ? i : m(e, i)) - r));
       }
     },
-        Nt = function Nt(t, e) {
+        zt = function zt(t, e) {
       return Pt(this, ft.call(Et(this), t, e));
     },
         Ht = function Ht(t) {
@@ -1162,9 +1164,9 @@ var e1jsComponents = function (t) {
     }) && (pt = dt = function dt() {
       return ut.call(this);
     });
-    var qt = d({}, zt);
+    var qt = d({}, Nt);
     d(qt, Rt), p(qt, vt, Rt.values), d(qt, {
-      slice: Nt,
+      slice: zt,
       set: Ht,
       constructor: function constructor() {},
       toString: pt,
@@ -1240,7 +1242,7 @@ var e1jsComponents = function (t) {
         d(1);
       }) && s(function () {
         new d(-1);
-      }) && N(function (t) {
+      }) && z(function (t) {
         new d(), new d(null), new d(1.5), new d(t);
       }, !0) || (d = n(function (t, n, i, r) {
         h(t, d, l);
@@ -1263,19 +1265,19 @@ var e1jsComponents = function (t) {
       }), l, {
         from: At,
         of: Ot
-      }), "BYTES_PER_ELEMENT" in S || p(S, "BYTES_PER_ELEMENT", e), a(a.P, l, zt), H(l), a(a.P + a.F * Ct, l, {
+      }), "BYTES_PER_ELEMENT" in S || p(S, "BYTES_PER_ELEMENT", e), a(a.P, l, Nt), H(l), a(a.P + a.F * Ct, l, {
         set: Ht
       }), a(a.P + a.F * !A, l, Rt), r || S.toString == pt || (S.toString = pt), a(a.P + a.F * s(function () {
         new d(1).slice();
       }), l, {
-        slice: Nt
+        slice: zt
       }), a(a.P + a.F * (s(function () {
         return [1, 2].toLocaleString() != new d([1, 2]).toLocaleString();
       }) || !s(function () {
         S.toLocaleString.call([1, 2]);
       })), l, {
         toLocaleString: It
-      }), z[l] = A ? _ : O, r || A || p(S, vt, O);
+      }), N[l] = A ? _ : O, r || A || p(S, vt, O);
     };
   } else t.exports = function () {};
 }, function (t, e, n) {
@@ -1872,30 +1874,25 @@ var e1jsComponents = function (t) {
       key: "initImages",
       value: function value(t, e, n, i) {
         var r = this,
-            s = window.document.createElement("div");
-        s.classList.add("progress-wrapper");
-        var a = window.document.createElement("e1-progress");
-        a.setAttribute("type", "circle"), a.setAttribute("progress", "@ProgressService.progress"), s.appendChild(a), t.element.appendChild(s);
-
-        var c = function c() {
+            s = function s() {
           r.loadImage(t.url, function (n) {
-            a.style.opacity = 0, e(n), !t.preview && t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady();
+            e(n), !t.preview && t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady();
           }, function (e) {
             t.instance.stats.previewProgress = e, o.setModel(null, "@ProgressService.progress", e), t.instance.trigger("statsUpdate", t.instance.stats);
           }, function (e) {
-            a.style.opacity = 0, i && i(e), !t.preview && t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady();
+            i && i(e), !t.preview && t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady();
           });
         };
 
         t.preview ? function () {
           r.loadImage(t.preview, function (e) {
-            n(e), t.instance.stats.previewProgress = 100, c(), t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady();
+            n(e), t.instance.stats.previewProgress = 100, s(), t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady();
           }, function (e) {
             t.instance.stats.previewProgress = e, t.instance.trigger("statsUpdate", t.instance.stats);
           }, function () {
-            t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady(), c();
+            t.instance.previewReady && "function" == typeof t.instance.previewReady && t.instance.previewReady(), s();
           });
-        }() : c();
+        }() : s();
       }
     }, {
       key: "canDoVr",
@@ -2353,7 +2350,7 @@ var e1jsComponents = function (t) {
         h = 0,
         f = t < 0 || 0 === t && 1 / t < 0 ? 1 : 0;
 
-    for (t = H(t), t != t || t === z ? (r = t != t ? 1 : 0, i = c) : (i = j(W(t) / D), t * (o = R(2, -i)) < 1 && (i--, o *= 2), t += i + l >= 1 ? u / o : u * R(2, 1 - l), t * o >= 2 && (i++, o /= 2), i + l >= c ? (r = 0, i = c) : i + l >= 1 ? (r = (t * o - 1) * R(2, e), i += l) : (r = t * R(2, l - 1) * R(2, e), i = 0)); e >= 8; s[h++] = 255 & r, r /= 256, e -= 8) {
+    for (t = H(t), t != t || t === N ? (r = t != t ? 1 : 0, i = c) : (i = j(W(t) / D), t * (o = R(2, -i)) < 1 && (i--, o *= 2), t += i + l >= 1 ? u / o : u * R(2, 1 - l), t * o >= 2 && (i++, o /= 2), i + l >= c ? (r = 0, i = c) : i + l >= 1 ? (r = (t * o - 1) * R(2, e), i += l) : (r = t * R(2, l - 1) * R(2, e), i = 0)); e >= 8; s[h++] = 255 & r, r /= 256, e -= 8) {
       ;
     }
 
@@ -2383,7 +2380,7 @@ var e1jsComponents = function (t) {
     }
 
     if (0 === u) u = 1 - s;else {
-      if (u === o) return i ? NaN : l ? -z : z;
+      if (u === o) return i ? NaN : l ? -N : N;
       i += R(2, e), u -= s;
     }
     return (l ? -1 : 1) * i * R(2, u - e);
@@ -2462,8 +2459,8 @@ var e1jsComponents = function (t) {
       _O = d.DataView,
       F = d.Math,
       I = d.RangeError,
-      z = d.Infinity,
-      N = _A2,
+      N = d.Infinity,
+      z = _A2,
       H = F.abs,
       R = F.pow,
       j = F.floor,
@@ -2482,11 +2479,11 @@ var e1jsComponents = function (t) {
       return new _A2(), new _A2(1.5), new _A2(NaN), "ArrayBuffer" != _A2.name;
     })) {
       _A2 = function A(t) {
-        return x(this, _A2), new N(C(t));
+        return x(this, _A2), new z(C(t));
       };
 
-      for (var U, Z = _A2[T] = N[T], G = M(N), X = 0; G.length > X;) {
-        (U = G[X++]) in _A2 || m(_A2, U, N[U]);
+      for (var U, Z = _A2[T] = z[T], G = M(z), X = 0; G.length > X;) {
+        (U = G[X++]) in _A2 || m(_A2, U, z[U]);
       }
 
       g || (Z.constructor = _A2);
@@ -3302,8 +3299,8 @@ var e1jsComponents = function (t) {
       _O2 = r.Symbol,
       F = r.JSON,
       I = F && F.stringify,
-      z = d("_hidden"),
-      N = d("toPrimitive"),
+      N = d("_hidden"),
+      z = d("toPrimitive"),
       H = {}.propertyIsEnumerable,
       R = h("symbol-registry"),
       j = h("symbols"),
@@ -3334,9 +3331,9 @@ var e1jsComponents = function (t) {
     return t instanceof _O2;
   },
       X = function X(t, e, n) {
-    return t === D && X(W, e, n), y(t), e = k(e, !0), y(n), o(j, e) ? (n.enumerable ? (o(t, z) && t[z][e] && (t[z][e] = !1), n = C(n, {
+    return t === D && X(W, e, n), y(t), e = k(e, !0), y(n), o(j, e) ? (n.enumerable ? (o(t, N) && t[N][e] && (t[N][e] = !1), n = C(n, {
       enumerable: S(0, !1)
-    })) : (o(t, z) || _(t, z, S(1, {})), t[z][e] = !0), U(t, e, n)) : _(t, e, n);
+    })) : (o(t, N) || _(t, N, S(1, {})), t[N][e] = !0), U(t, e, n)) : _(t, e, n);
   },
       Y = function Y(t, e) {
     y(t);
@@ -3352,17 +3349,17 @@ var e1jsComponents = function (t) {
   },
       K = function K(t) {
     var e = H.call(this, t = k(t, !0));
-    return !(this === D && o(j, t) && !o(W, t)) && (!(e || !o(this, t) || !o(j, t) || o(this, z) && this[z][t]) || e);
+    return !(this === D && o(j, t) && !o(W, t)) && (!(e || !o(this, t) || !o(j, t) || o(this, N) && this[N][t]) || e);
   },
       Q = function Q(t, e) {
     if (t = x(t), e = k(e, !0), t !== D || !o(j, e) || o(W, e)) {
       var n = T(t, e);
-      return !n || !o(j, e) || o(t, z) && t[z][e] || (n.enumerable = !0), n;
+      return !n || !o(j, e) || o(t, N) && t[N][e] || (n.enumerable = !0), n;
     }
   },
       $ = function $(t) {
     for (var e, n = A(x(t)), i = [], r = 0; n.length > r;) {
-      o(j, e = n[r++]) || e == z || e == l || i.push(e);
+      o(j, e = n[r++]) || e == N || e == l || i.push(e);
     }
 
     return i;
@@ -3380,7 +3377,7 @@ var e1jsComponents = function (t) {
 
     var t = p(arguments.length > 0 ? arguments[0] : void 0),
         e = function e(n) {
-      this === D && e.call(W, n), o(this, z) && o(this[z], t) && (this[z][t] = !1), U(this, t, S(1, n));
+      this === D && e.call(W, n), o(this, N) && o(this[N], t) && (this[N][t] = !1), U(this, t, S(1, n));
     };
 
     return s && V && U(D, t, {
@@ -3443,7 +3440,7 @@ var e1jsComponents = function (t) {
         if ("function" == typeof n && (_e = n.call(this, t, _e)), !G(_e)) return _e;
       }), i[1] = e, I.apply(F, i);
     }
-  }), _O2.prototype[N] || n(12)(_O2.prototype, N, _O2.prototype.valueOf), f(_O2, "Symbol"), f(Math, "Math", !0), f(r.JSON, "JSON", !0);
+  }), _O2.prototype[z] || n(12)(_O2.prototype, z, _O2.prototype.valueOf), f(_O2, "Symbol"), f(Math, "Math", !0), f(r.JSON, "JSON", !0);
 }, function (t, e, n) {
   var i = n(34),
       r = n(51),
@@ -4780,7 +4777,7 @@ var e1jsComponents = function (t) {
     var e = this;
     e._d || (e._d = !0, e = e._w || e, e._v = t, e._s = 2, e._a || (e._a = e._c.slice()), _(e, !0));
   },
-      z = function t(e) {
+      N = function t(e) {
     var n,
         i = this;
 
@@ -4814,7 +4811,7 @@ var e1jsComponents = function (t) {
     d(this, _C, "Promise", "_h"), p(t), i.call(this);
 
     try {
-      t(l(z, this, 1), l(I, this, 1));
+      t(l(N, this, 1), l(I, this, 1));
     } catch (t) {
       I.call(this, t);
     }
@@ -4830,7 +4827,7 @@ var e1jsComponents = function (t) {
     }
   }), o = function o() {
     var t = new i();
-    this.promise = t, this.resolve = l(z, t, 1), this.reject = l(I, t, 1);
+    this.promise = t, this.resolve = l(N, t, 1), this.reject = l(I, t, 1);
   }, y.f = L = function L(t) {
     return t === _C || t === s ? new o(t) : r(t);
   }), h(h.G + h.W + h.F * !P, {
@@ -8589,15 +8586,16 @@ var e1jsComponents = function (t) {
     }, {
       key: "setPositions",
       value: function value(t, e, n, i, r) {
-        var o = {
-          width: this.container.offsetWidth,
-          height: this.container.offsetHeight
-        };
-        t || (t = this.positions.x), e || (e = this.positions.y), n || (n = this.positions.w), i || (i = this.positions.h), t < 0 && (t = 0), n + t > o.width && (n = o.width - t), n < this.minWidth && (n = this.minWidth, t = this.positions.x), e < 0 && (e = 0), i + e > o.height && (i = o.height - e), i < this.minHeight && (i = this.minHeight, e = this.positions.y), r && (n + t > o.width && (t = o.width - this.minWidth), i + e > o.height && (e = o.height - this.minHeight)), this.positions.x = t, this.positions.y = e, this.positions.w = n, this.positions.h = i;
-        var s = window.document.getElementById("maskInner");
-        s.setAttribute("x", t), s.setAttribute("y", e), s.setAttribute("width", n), s.setAttribute("height", i);
-        var a = window.document.getElementById("maskUpper");
-        a.setAttribute("x", t), a.setAttribute("y", e), a.setAttribute("width", n), a.setAttribute("height", i);
+        var o = window.document.getElementById("maskInner"),
+            s = window.document.getElementById("maskUpper");
+
+        if (o || s) {
+          var a = {
+            width: this.container.offsetWidth,
+            height: this.container.offsetHeight
+          };
+          t || (t = this.positions.x), e || (e = this.positions.y), n || (n = this.positions.w), i || (i = this.positions.h), t < 0 && (t = 0), n + t > a.width && (n = a.width - t), n < this.minWidth && (n = this.minWidth, t = this.positions.x), e < 0 && (e = 0), i + e > a.height && (i = a.height - e), i < this.minHeight && (i = this.minHeight, e = this.positions.y), r && (n + t > a.width && (t = a.width - this.minWidth), i + e > a.height && (e = a.height - this.minHeight)), this.positions.x = t, this.positions.y = e, this.positions.w = n, this.positions.h = i, o && (o.setAttribute("x", t), o.setAttribute("y", e), o.setAttribute("width", n), o.setAttribute("height", i)), s && (s.setAttribute("x", t), s.setAttribute("y", e), s.setAttribute("width", n), s.setAttribute("height", i));
+        }
       }
     }, {
       key: "createHtml",
@@ -8684,7 +8682,7 @@ var e1jsComponents = function (t) {
     function t(e) {
       var i = this;
       n(this, t), this.el = e, this.update = this.update, this.el.innerHTML = '\n        <div class="modal">\n            <div class="modal-wrapper">\n                <div class="modal-content"></div>\n                <div class="modal-close">\n                    <e1-icon type="close-thin"></e1-icon>\n                </div>\n            </div>\n        </div>', this.el.querySelector(".modal").querySelector(".modal-close").addEventListener("click", function () {
-        o.setModel(i.el, "active", !1);
+        o.setModel(i.el, "active", !1), o.setModel(i.el, "clss", "");
       }, !1), this.update();
     }
 
@@ -8693,8 +8691,9 @@ var e1jsComponents = function (t) {
       value: function value() {
         var t = this.el.querySelector(".modal"),
             e = t.querySelector(".modal-content"),
-            n = o.getModel(this.el, "active");
-        n && "true" === n.toString() ? (e.innerHTML = "", e.appendChild(o.cleanHtml("<div>" + o.getModel(this.el, "content") + "</div>")), setTimeout(function () {
+            n = o.getModel(this.el, "active"),
+            i = o.getModel(this.el, "clss");
+        i ? t.classList.add(i) : t.className = "modal", n && "true" === n.toString() ? (e.innerHTML = "", e.appendChild(o.cleanHtml("<div>" + o.getModel(this.el, "content") + "</div>")), setTimeout(function () {
           t.classList.add("active");
         }, 10)) : (t.classList.remove("active"), setTimeout(function () {
           e.innerHTML = "";
@@ -9611,8 +9610,8 @@ function () {
     this.title = "";
     this.content = "\n        <div class=\"upload-content\">\n            <div style=\"width:50px;\"><e1-icon type=\"upload\"><e1-icon></div>\n            <div><span>Drag and drop your image here</span>,<br><span>or</span></div>\n            <div><button class=\"btn\">Browse</button></div>\n        </div>";
     this.uploadPane = "\n            <div style=\"display:none;\" id=\"showUploadProgress\">\n                <div id=\"uploading-progress\">\n                    <div id=\"count\"></div>\n                    <div class=\"progress\" id=\"progressBar\"></div>\n                    <button id=\"cancelProgress\" class=\"btn\" onclick=\"E1.services.UploadService.cancel()\">Cancel</button>\n                </div>\n            </div>\n            <div id=\"upload-pane\">\n                <div class=\"upload-pane-inner\">\n                    <div class=\"upload-viewer\">\n                        <div class=\"img-container-outer\">\n                            <div id=\"imgContainer\">\n                                <e1-image-viewer id=\"uploadViewer\" image-ready=\"@UploadService.uploadImgReady()\" url=\"@UploadService.image.image\" type=\"@UploadService.image.renderer\" crop=\"true\"></e1-image-viewer>\n                            </div>\n                        </div>\n                    </div>\n                    <div style=\"display:none;\" e1-show=\"@UploadService.imageReady\">\n                        <div class=\"inputs\">\n                            <div id=\"upload-title\">\n                                <label for=\"shot-title\" class=\"required\" style=\"display: block;\">Title</label>\n                                <input id=\"shot-title\" e1-value=\"@UploadService.title\" type=\"text\" onkeyup=\"E1.services.UploadService.uploadKeyPress(event)\" />\n                            </div>\n                            <div class=\"buttons\">\n                                <button onclick=\"E1.services.UploadService.upload()\" class=\"btn upload-result\" style=\"margin: 0px 3px;\">UPLOAD</button>\n                                <button class=\"btn secondary-btn upload-cancel\" onclick=\"window.location.reload()\">Cancel</button>\n                            </div>\n                        </div>\n                    </div>\n                </div>\n            </div>\n        ";
-    this.userId = 174046602571285228;
-    this.session = "eyJhbGciOiJIUzI1NiJ9.eyJkZCI6IklETU1pbmlTaXRlRGV2aWNlSWQiLCJzZCI6IlRPUC1FNGc4YlhwRTYtLU5PREUtOVVOdjlaUnhYVDlxVmtONTdkQUVfNjkwMjU4MiIsImNkIjoiMTYzOTAwMTA3ODA3MjYwODg4Iiwic2UiOiJhcGlxal9LVzlvQlNkMUdwTE95LXVMZTBMYXdMWEZpWCIsImlkIjoiMTc0MDQ2NjAyNTcxMjg1MjI4IiwiZXhwIjoxNTIyMDE5ODc2LCJwbSI6IlJlYWRXcml0ZURlbGV0ZSJ9.KufgHRB5-HDyrtrsRTaNBy6C3ukS-tdWha4NXOB57gg";
+    this.userId = window.localStorage.getItem("userId");
+    this.session = window.localStorage.getItem("session");
     this.type = null;
     this.showUploadProgress = false;
     this.progress = "0%";
@@ -9622,11 +9621,18 @@ function () {
       image: null,
       renderer: null
     };
+    E1.subscribe("@UploadService.userId", function (userId) {
+      window.localStorage.setItem("userId", userId);
+    });
+    E1.subscribe("@UploadService.session", function (session) {
+      window.localStorage.setItem("session", session);
+    });
   }
 
   _createClass(UploadService, [{
     key: "cancel",
     value: function cancel() {
+      self.uploader.cancel();
       window.document.getElementById("showUploadProgress").style.display = "none";
       E1.setModel(null, "@UploadService.showUploadProgress", false);
       E1.setModel(null, "@UploadService.progress", "0%");
@@ -9654,7 +9660,8 @@ function () {
     key: "upload",
     value: function upload() {
       if (!E1.getModel(null, "@UploadService.title") || E1.getModel(null, "@UploadService.title").trim() === "") {
-        E1.setModel(null, "@MessageService.message", {
+        self.cancel();
+        return E1.setModel(null, "@MessageService.message", {
           active: true,
           icon: "!",
           type: "error",
@@ -9681,13 +9688,17 @@ function () {
         type: renderer.renderer.is3D ? "3d" : false
       };
       var title = window.encodeURIComponent(E1.getModel(null, "@UploadService.title").replace(/<script|&lt;script/ig, "").trim());
-      var uploader = new _uploader.default(self.file, title, this.userId, this.session, cropOptions, function (progress) {
+      this.uploader = new _uploader.default(self.file, title, this.userId, this.session, cropOptions, function (progress) {
         window.document.getElementById("count").textContent = "".concat(progress, "%");
         window.document.getElementById("progressBar").style.width = "".concat(progress, "%");
       });
-      uploader.upload().then(function (res) {
+      this.uploader.upload().then(function (res) {
         console.log("DONE", res);
         window.document.getElementById("showUploadProgress").style.display = "none";
+
+        if (res) {
+          E1.services.App.showImage(res);
+        }
       }).catch(function (rej) {
         console.log("ERROR", rej);
         window.document.getElementById("showUploadProgress").style.display = "none";
@@ -9811,6 +9822,7 @@ function () {
     this.cropOptions = cropOptions;
     this.progressCB = progressCB;
     this.bytesPerChunk = 647212;
+    this.stop = false;
   }
 
   _createClass(Uploader, [{
@@ -9859,6 +9871,10 @@ function () {
       var _this2 = this;
 
       return new Promise(function (resolve, reject) {
+        if (_this2.stop) {
+          resolve();
+        }
+
         if (!_this2.urls[index]) {
           return reject("No url");
         }
@@ -9928,6 +9944,10 @@ function () {
       var _this4 = this;
 
       return new Promise(function (resolve, reject) {
+        if (_this4.stop) {
+          resolve();
+        }
+
         var params = {
           directory: _this4.urls.directory,
           ext: _this4.ext,
@@ -9959,6 +9979,11 @@ function () {
 
         x.send(JSON.stringify(params));
       });
+    }
+  }, {
+    key: "cancel",
+    value: function cancel() {
+      this.stop = true;
     }
   }, {
     key: "upload",
@@ -9993,6 +10018,92 @@ function () {
 }();
 
 module.exports = Uploader;
+
+/***/ }),
+/* 16 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+var E1 = window.E1;
+var self;
+
+var App =
+/*#__PURE__*/
+function () {
+  function App() {
+    _classCallCheck(this, App);
+
+    this.imagesUrl = "https://api.cklsylabs.com/swg/images/";
+    this.images = {};
+    this.showImages();
+  }
+
+  _createClass(App, [{
+    key: "showImage",
+    value: function showImage(res) {
+      if (typeof res === "string") {
+        res = self.images[res];
+      }
+
+      var type = "Screenshot";
+
+      if (res.is360) {
+        type = "360Mono";
+
+        if (res.is3D) {
+          type = "360Stereo";
+        }
+      } else if (res.is3D) {
+        type = "Stereo";
+      }
+
+      console.log(type);
+      E1.setModel(null, "@MessageService.modal", {
+        active: true,
+        clss: "imageModal",
+        content: "\n                <div id=\"image-modal\">\n                    <div><e1-image-viewer type=\"".concat(type, "\" url=\"").concat(res.largeImage, "\" preview=\"").concat(res.smallImage, "\"></e1-image-viewer></div>\n                    <div><h3>").concat(res.title, "</h3></div>\n                </div>\n            ")
+      });
+    }
+  }, {
+    key: "showImages",
+    value: function showImages() {
+      var _this = this;
+
+      var x = new XMLHttpRequest();
+      x.open("GET", this.imagesUrl, false);
+
+      x.onload = function (res) {
+        var res = JSON.parse(x.responseText);
+        console.log(res);
+
+        if (res && res.Items) {
+          var container = window.document.getElementById("images");
+          res.Items.forEach(function (element) {
+            var html = "<div class=\"image\" onclick=\"E1.services.App.showImage('".concat(element.id, "')\"><img src=\"").concat(element.thumbnailImage, "\"></div>");
+            console.log(html);
+            container.appendChild(E1.cleanHtml(html));
+            _this.images[element.id] = element;
+          });
+        }
+      };
+
+      x.send();
+    }
+  }]);
+
+  return App;
+}();
+
+self = new App();
+E1.registerService("App", self);
 
 /***/ })
 /******/ ]);

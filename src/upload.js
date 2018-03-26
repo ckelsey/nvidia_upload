@@ -46,8 +46,8 @@ class UploadService {
             </div>
         `
 
-        this.userId = 174046602571285228
-        this.session = `eyJhbGciOiJIUzI1NiJ9.eyJkZCI6IklETU1pbmlTaXRlRGV2aWNlSWQiLCJzZCI6IlRPUC1FNGc4YlhwRTYtLU5PREUtOVVOdjlaUnhYVDlxVmtONTdkQUVfNjkwMjU4MiIsImNkIjoiMTYzOTAwMTA3ODA3MjYwODg4Iiwic2UiOiJhcGlxal9LVzlvQlNkMUdwTE95LXVMZTBMYXdMWEZpWCIsImlkIjoiMTc0MDQ2NjAyNTcxMjg1MjI4IiwiZXhwIjoxNTIyMDE5ODc2LCJwbSI6IlJlYWRXcml0ZURlbGV0ZSJ9.KufgHRB5-HDyrtrsRTaNBy6C3ukS-tdWha4NXOB57gg`
+        this.userId = window.localStorage.getItem(`userId`)
+        this.session = window.localStorage.getItem(`session`)
 
         this.type = null
         this.showUploadProgress = false
@@ -58,9 +58,18 @@ class UploadService {
             image: null,
             renderer: null
         }
+
+        E1.subscribe(`@UploadService.userId`, (userId)=>{
+            window.localStorage.setItem(`userId`, userId)
+        })
+
+        E1.subscribe(`@UploadService.session`, (session) => {
+            window.localStorage.setItem(`session`, session)
+        })
     }
 
     cancel() {
+        self.uploader.cancel()
         window.document.getElementById(`showUploadProgress`).style.display = `none`
         E1.setModel(null, "@UploadService.showUploadProgress", false)
         E1.setModel(null, "@UploadService.progress", `0%`)
@@ -86,7 +95,9 @@ class UploadService {
     upload() {
 
         if (!E1.getModel(null, `@UploadService.title`) || E1.getModel(null, `@UploadService.title`).trim() === ``){
-            E1.setModel(null, "@MessageService.message", {
+            self.cancel()
+
+            return E1.setModel(null, "@MessageService.message", {
                 active: true,
                 icon: "!",
                 type: "error",
@@ -116,15 +127,20 @@ class UploadService {
 
         var title = window.encodeURIComponent(E1.getModel(null, `@UploadService.title`).replace(/<script|&lt;script/ig, "").trim())
 
-        var uploader = new Uploader(self.file, title, this.userId, this.session, cropOptions, (progress) => {
+        this.uploader = new Uploader(self.file, title, this.userId, this.session, cropOptions, (progress) => {
             window.document.getElementById(`count`).textContent = `${progress}%`
             window.document.getElementById(`progressBar`).style.width = `${progress}%`
         })
 
-        uploader.upload()
+        this.uploader.upload()
             .then(res => {
                 console.log("DONE", res)
                 window.document.getElementById(`showUploadProgress`).style.display = `none`
+
+                if (res){
+
+                    E1.services.App.showImage(res)
+                }
             })
             .catch(rej => {
                 console.log("ERROR", rej)
