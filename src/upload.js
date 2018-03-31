@@ -46,9 +46,6 @@ class UploadService {
             </div>
         `
 
-        this.userId = window.localStorage.getItem(`userId`)
-        this.session = window.localStorage.getItem(`session`)
-
         this.type = null
         this.showUploadProgress = false
         this.progress = `0%`
@@ -58,14 +55,6 @@ class UploadService {
             image: null,
             renderer: null
         }
-
-        E1.subscribe(`@UploadService.userId`, (userId)=>{
-            window.localStorage.setItem(`userId`, userId)
-        })
-
-        E1.subscribe(`@UploadService.session`, (session) => {
-            window.localStorage.setItem(`session`, session)
-        })
     }
 
     cancel() {
@@ -127,7 +116,7 @@ class UploadService {
 
         var title = window.encodeURIComponent(E1.getModel(null, `@UploadService.title`).replace(/<script|&lt;script/ig, "").trim())
 
-        this.uploader = new Uploader(self.file, title, this.userId, this.session, cropOptions, (progress) => {
+        this.uploader = new Uploader(self.file, title, E1.services.UserService.user.id, E1.services.UserService.user.session, cropOptions, (progress) => {
             window.document.getElementById(`count`).textContent = `${progress}%`
             window.document.getElementById(`progressBar`).style.width = `${progress}%`
         })

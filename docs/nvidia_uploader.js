@@ -60,7 +60,7 @@
 /******/ 	__webpack_require__.p = "./";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 0);
+/******/ 	return __webpack_require__(__webpack_require__.s = 1);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -70,13 +70,1177 @@
 "use strict";
 
 
-__webpack_require__(1);
+/**
+ * lzjs
+ *
+ * @description  Compression by LZ algorithm in JavaScript.
+ * @fileoverview Data compression library
+ * @version      1.3.0
+ * @date         2015-10-06
+ * @link         https://github.com/polygonplanet/lzjs
+ * @copyright    Copyright (c) 2014-2015 polygon planet <polygon.planet.aqua@gmail.com>
+ * @license      Licensed under the MIT license.
+ */
+
+/*jshint bitwise:false, eqnull:true */
+(function (name, context, factory) {
+  // Supports UMD. AMD, CommonJS/Node.js and browser context
+  if (true) {
+    if (typeof module !== 'undefined' && module.exports) {
+      module.exports = factory();
+    } else {
+      exports[name] = factory();
+    }
+  } else if (typeof define === 'function' && define.amd) {
+    define(factory);
+  } else {
+    context[name] = factory();
+  }
+})('lzjs', void 0, function () {
+  'use strict';
+
+  var fromCharCode = String.fromCharCode;
+  var hasOwnProperty = Object.prototype.hasOwnProperty;
+  var HAS_TYPED = typeof Uint8Array !== 'undefined' && typeof Uint16Array !== 'undefined'; // Test for String.fromCharCode.apply.
+
+  var CAN_CHARCODE_APPLY = false;
+  var CAN_CHARCODE_APPLY_TYPED = false;
+
+  try {
+    if (fromCharCode.apply(null, [0x61]) === 'a') {
+      CAN_CHARCODE_APPLY = true;
+    }
+  } catch (e) {}
+
+  if (HAS_TYPED) {
+    try {
+      if (fromCharCode.apply(null, new Uint8Array([0x61])) === 'a') {
+        CAN_CHARCODE_APPLY_TYPED = true;
+      }
+    } catch (e) {}
+  } // Function.prototype.apply stack max range
+
+
+  var APPLY_BUFFER_SIZE = 65533;
+  var APPLY_BUFFER_SIZE_OK = null; // IE has bug of String.prototype.lastIndexOf when second argument specified.
+
+  var STRING_LASTINDEXOF_BUG = false;
+
+  if ("abc\u307B\u3052".lastIndexOf("\u307B\u3052", 1) !== -1) {
+    STRING_LASTINDEXOF_BUG = true;
+  }
+
+  var TABLE = function () {
+    var table = '';
+    var esc = {
+      0x8: 1,
+      0xa: 1,
+      0xb: 1,
+      0xc: 1,
+      0xd: 1,
+      0x5c: 1
+    };
+
+    for (var i = 0; i < 0x7f; i++) {
+      if (!hasOwnProperty.call(esc, i)) {
+        table += fromCharCode(i);
+      }
+    }
+
+    return table;
+  }(); // Buffers
+
+
+  var TABLE_LENGTH = TABLE.length;
+  var TABLE_DIFF = Math.max(TABLE_LENGTH, 62) - Math.min(TABLE_LENGTH, 62);
+  var BUFFER_MAX = TABLE_LENGTH - 1;
+  var TABLE_BUFFER_MAX = BUFFER_MAX * (BUFFER_MAX + 1); // Sliding Window
+
+  var WINDOW_MAX = 1024;
+  var WINDOW_BUFFER_MAX = 304; // maximum 304
+  // Chunk buffer length
+
+  var COMPRESS_CHUNK_SIZE = APPLY_BUFFER_SIZE;
+  var COMPRESS_CHUNK_MAX = COMPRESS_CHUNK_SIZE - TABLE_LENGTH;
+  var DECOMPRESS_CHUNK_SIZE = APPLY_BUFFER_SIZE;
+  var DECOMPRESS_CHUNK_MAX = DECOMPRESS_CHUNK_SIZE + WINDOW_MAX * 2; // Unicode table : U+0000 - U+0084
+
+  var LATIN_CHAR_MAX = 11;
+  var LATIN_BUFFER_MAX = LATIN_CHAR_MAX * (LATIN_CHAR_MAX + 1); // Unicode table : U+0000 - U+FFFF
+
+  var UNICODE_CHAR_MAX = 40;
+  var UNICODE_BUFFER_MAX = UNICODE_CHAR_MAX * (UNICODE_CHAR_MAX + 1); // Index positions
+
+  var LATIN_INDEX = TABLE_LENGTH + 1;
+  var LATIN_INDEX_START = TABLE_DIFF + 20;
+  var UNICODE_INDEX = TABLE_LENGTH + 5; // Decode/Start positions
+
+  var DECODE_MAX = TABLE_LENGTH - TABLE_DIFF - 19;
+  var LATIN_DECODE_MAX = UNICODE_CHAR_MAX + 7;
+  var CHAR_START = LATIN_DECODE_MAX + 1;
+  var COMPRESS_START = CHAR_START + 1;
+  var COMPRESS_FIXED_START = COMPRESS_START + 5;
+  var COMPRESS_INDEX = COMPRESS_FIXED_START + 5; // 59
+  // LZSS Compressor
+
+  function LZSSCompressor(options) {
+    this._init(options);
+  }
+
+  LZSSCompressor.prototype = {
+    _init: function _init(options) {
+      options = options || {};
+      this._data = null;
+      this._table = null;
+      this._result = null;
+      this._onDataCallback = options.onData;
+      this._onEndCallback = options.onEnd;
+      this._maxBytes = options.maxBytes;
+    },
+    _createTable: function _createTable() {
+      var table = createBuffer(8, TABLE_LENGTH);
+
+      for (var i = 0; i < TABLE_LENGTH; i++) {
+        table[i] = TABLE.charCodeAt(i);
+      }
+
+      return table;
+    },
+    _onData: function _onData(buffer, length) {
+      var data = bufferToString_fast(buffer, length);
+
+      if (this._onDataCallback) {
+        this._onDataCallback(data);
+      } else {
+        this._result += data;
+      }
+    },
+    _onEnd: function _onEnd() {
+      if (this._onEndCallback) {
+        this._onEndCallback();
+      }
+
+      this._data = this._table = null;
+    },
+    // Searches for a longest match
+    _search: function _search() {
+      var i = 2;
+      var data = this._data;
+      var offset = this._offset;
+      var len = BUFFER_MAX;
+
+      if (this._dataLen - offset < len) {
+        len = this._dataLen - offset;
+      }
+
+      if (i > len) {
+        return false;
+      }
+
+      var pos = offset - WINDOW_BUFFER_MAX;
+      var win = data.substring(pos, offset + len);
+      var limit = offset + i - 3 - pos;
+      var j, s, index, lastIndex, bestIndex, winPart;
+
+      do {
+        if (i === 2) {
+          s = data.charAt(offset) + data.charAt(offset + 1); // Fast check by pre-match for the slow lastIndexOf.
+
+          index = win.indexOf(s);
+
+          if (!~index || index > limit) {
+            break;
+          }
+        } else if (i === 3) {
+          s = s + data.charAt(offset + 2);
+        } else {
+          s = data.substr(offset, i);
+        }
+
+        if (STRING_LASTINDEXOF_BUG) {
+          winPart = data.substring(pos, offset + i - 1);
+          lastIndex = winPart.lastIndexOf(s);
+        } else {
+          lastIndex = win.lastIndexOf(s, limit);
+        }
+
+        if (!~lastIndex) {
+          break;
+        }
+
+        bestIndex = lastIndex;
+        j = pos + lastIndex;
+
+        do {
+          if (data.charCodeAt(offset + i) !== data.charCodeAt(j + i)) {
+            break;
+          }
+        } while (++i < len);
+
+        if (index === lastIndex) {
+          i++;
+          break;
+        }
+      } while (++i < len);
+
+      if (i === 2) {
+        return false;
+      }
+
+      this._index = WINDOW_BUFFER_MAX - bestIndex;
+      this._length = i - 1;
+      return true;
+    },
+    compress: function compress(data) {
+      if (data == null || data.length === 0) {
+        return '';
+      }
+
+      var result = '';
+
+      var table = this._createTable();
+
+      var win = createWindow();
+      var buffer = createBuffer(8, COMPRESS_CHUNK_SIZE);
+      var i = 0;
+      var bytes = 0;
+      this._result = '';
+      this._offset = win.length;
+      this._data = win + data;
+      this._dataLen = this._data.length;
+      win = data = null;
+      var index = -1;
+      var lastIndex = -1;
+      var c, c1, c2, c3, c4;
+
+      while (this._offset < this._dataLen) {
+        if (!this._search()) {
+          c = this._data.charCodeAt(this._offset++);
+
+          if (c < LATIN_BUFFER_MAX) {
+            if (c < UNICODE_CHAR_MAX) {
+              c1 = c;
+              c2 = 0;
+              index = LATIN_INDEX;
+            } else {
+              c1 = c % UNICODE_CHAR_MAX;
+              c2 = (c - c1) / UNICODE_CHAR_MAX;
+              index = c2 + LATIN_INDEX;
+            } // Latin index
+
+
+            if (lastIndex === index) {
+              buffer[i++] = table[c1];
+              bytes++;
+            } else {
+              buffer[i++] = table[index - LATIN_INDEX_START];
+              buffer[i++] = table[c1];
+              bytes += 2;
+              lastIndex = index;
+            }
+          } else {
+            if (c < UNICODE_BUFFER_MAX) {
+              c1 = c;
+              c2 = 0;
+              index = UNICODE_INDEX;
+            } else {
+              c1 = c % UNICODE_BUFFER_MAX;
+              c2 = (c - c1) / UNICODE_BUFFER_MAX;
+              index = c2 + UNICODE_INDEX;
+            }
+
+            if (c1 < UNICODE_CHAR_MAX) {
+              c3 = c1;
+              c4 = 0;
+            } else {
+              c3 = c1 % UNICODE_CHAR_MAX;
+              c4 = (c1 - c3) / UNICODE_CHAR_MAX;
+            } // Unicode index
+
+
+            if (lastIndex === index) {
+              buffer[i++] = table[c3];
+              buffer[i++] = table[c4];
+              bytes += 2;
+            } else {
+              buffer[i++] = table[CHAR_START];
+              buffer[i++] = table[index - TABLE_LENGTH];
+              buffer[i++] = table[c3];
+              buffer[i++] = table[c4];
+              bytes += 4;
+              lastIndex = index;
+            }
+          }
+        } else {
+          if (this._index < BUFFER_MAX) {
+            c1 = this._index;
+            c2 = 0;
+          } else {
+            c1 = this._index % BUFFER_MAX;
+            c2 = (this._index - c1) / BUFFER_MAX;
+          }
+
+          if (this._length === 2) {
+            buffer[i++] = table[c2 + COMPRESS_FIXED_START];
+            buffer[i++] = table[c1];
+            bytes += 2;
+          } else {
+            buffer[i++] = table[c2 + COMPRESS_START];
+            buffer[i++] = table[c1];
+            buffer[i++] = table[this._length];
+            bytes += 3;
+          }
+
+          this._offset += this._length;
+
+          if (~lastIndex) {
+            lastIndex = -1;
+          }
+        }
+
+        if (bytes > this._maxBytes) {
+          return false;
+        }
+
+        if (i >= COMPRESS_CHUNK_MAX) {
+          this._onData(buffer, i);
+
+          i = 0;
+        }
+      }
+
+      if (i > 0) {
+        this._onData(buffer, i);
+      }
+
+      this._onEnd();
+
+      result = this._result;
+      this._result = null;
+      return result === null ? '' : result;
+    }
+  }; // LZSS Decompressor
+
+  function LZSSDecompressor(options) {
+    this._init(options);
+  }
+
+  LZSSDecompressor.prototype = {
+    _init: function _init(options) {
+      options = options || {};
+      this._result = null;
+      this._onDataCallback = options.onData;
+      this._onEndCallback = options.onEnd;
+    },
+    _createTable: function _createTable() {
+      var table = {};
+
+      for (var i = 0; i < TABLE_LENGTH; i++) {
+        table[TABLE.charAt(i)] = i;
+      }
+
+      return table;
+    },
+    _onData: function _onData(ended) {
+      var data;
+
+      if (this._onDataCallback) {
+        if (ended) {
+          data = this._result;
+          this._result = [];
+        } else {
+          var len = DECOMPRESS_CHUNK_SIZE - WINDOW_MAX;
+          data = this._result.slice(WINDOW_MAX, WINDOW_MAX + len);
+          this._result = this._result.slice(0, WINDOW_MAX).concat(this._result.slice(WINDOW_MAX + len));
+        }
+
+        if (data.length > 0) {
+          this._onDataCallback(bufferToString_fast(data));
+        }
+      }
+    },
+    _onEnd: function _onEnd() {
+      if (this._onEndCallback) {
+        this._onEndCallback();
+      }
+    },
+    decompress: function decompress(data) {
+      if (data == null || data.length === 0) {
+        return '';
+      }
+
+      this._result = stringToArray(createWindow());
+      var result = '';
+
+      var table = this._createTable();
+
+      var out = false;
+      var index = null;
+      var len = data.length;
+      var offset = 0;
+      var i, c, c2, c3;
+      var code, pos, length, sub, subLen, expandLen;
+
+      for (; offset < len; offset++) {
+        c = table[data.charAt(offset)];
+
+        if (c === void 0) {
+          continue;
+        }
+
+        if (c < DECODE_MAX) {
+          if (!out) {
+            // Latin index
+            code = index * UNICODE_CHAR_MAX + c;
+          } else {
+            // Unicode index
+            c3 = table[data.charAt(++offset)];
+            code = c3 * UNICODE_CHAR_MAX + c + UNICODE_BUFFER_MAX * index;
+          }
+
+          this._result[this._result.length] = code;
+        } else if (c < LATIN_DECODE_MAX) {
+          // Latin starting point
+          index = c - DECODE_MAX;
+          out = false;
+        } else if (c === CHAR_START) {
+          // Unicode starting point
+          c2 = table[data.charAt(++offset)];
+          index = c2 - 5;
+          out = true;
+        } else if (c < COMPRESS_INDEX) {
+          c2 = table[data.charAt(++offset)];
+
+          if (c < COMPRESS_FIXED_START) {
+            pos = (c - COMPRESS_START) * BUFFER_MAX + c2;
+            length = table[data.charAt(++offset)];
+          } else {
+            pos = (c - COMPRESS_FIXED_START) * BUFFER_MAX + c2;
+            length = 2;
+          }
+
+          sub = this._result.slice(-pos);
+
+          if (sub.length > length) {
+            sub.length = length;
+          }
+
+          subLen = sub.length;
+
+          if (sub.length > 0) {
+            expandLen = 0;
+
+            while (expandLen < length) {
+              for (i = 0; i < subLen; i++) {
+                this._result[this._result.length] = sub[i];
+
+                if (++expandLen >= length) {
+                  break;
+                }
+              }
+            }
+          }
+
+          index = null;
+        }
+
+        if (this._result.length >= DECOMPRESS_CHUNK_MAX) {
+          this._onData();
+        }
+      }
+
+      this._result = this._result.slice(WINDOW_MAX);
+
+      this._onData(true);
+
+      this._onEnd();
+
+      result = bufferToString_fast(this._result);
+      this._result = null;
+      return result;
+    }
+  }; // LZW Compression
+
+  function LZW(options) {
+    this._init(options);
+  }
+
+  LZW.prototype = {
+    _init: function _init(options) {
+      options = options || {};
+      this._codeStart = options.codeStart || 0xff;
+      this._codeMax = options.codeMax || 0xffff;
+      this._maxBytes = options.maxBytes;
+    },
+    compress: function compress(data) {
+      if (data == null || data.length === 0) {
+        return '';
+      }
+
+      var result = '';
+      var resultBytes = 0;
+      var i = 0;
+      var len = data.length;
+      var buffer = '';
+      var code = this._codeStart + 1;
+      var codeMax = this._codeMax;
+      var codeBytes = 2;
+      var dict = [];
+      var dictLen = 0;
+      var c, s, key, index, bitLen, length;
+
+      if (len > 0) {
+        buffer = c = data.charAt(i++);
+      }
+
+      while (i < len) {
+        c = data.charAt(i++);
+        key = buffer + c;
+        length = key.length;
+        bitLen = 1 << length;
+
+        if ((length < 32 && dictLen & bitLen || length >= 32 && dict[length] !== void 0) && hasOwnProperty.call(dict[length], key)) {
+          buffer += c;
+        } else {
+          if (buffer.length === 1) {
+            result += buffer;
+            resultBytes++;
+          } else {
+            result += dict[buffer.length][buffer];
+            resultBytes += codeBytes;
+          }
+
+          if (resultBytes > this._maxBytes) {
+            return false;
+          }
+
+          if (code <= codeMax) {
+            key = buffer + c;
+            length = key.length;
+            bitLen = 1 << length;
+
+            if (length < 32 && !(dictLen & bitLen) || length >= 32 && dict[length] === void 0) {
+              dict[length] = {};
+              dictLen |= bitLen;
+            }
+
+            dict[length][key] = fromCharCode(code++);
+
+            if (code === 0x800) {
+              codeBytes = 3;
+            }
+          }
+
+          buffer = c;
+        }
+      }
+
+      if (buffer.length === 1) {
+        result += buffer;
+        resultBytes++;
+      } else {
+        result += dict[buffer.length][buffer];
+        resultBytes += codeBytes;
+      }
+
+      if (resultBytes > this._maxBytes) {
+        return false;
+      }
+
+      return result;
+    },
+    decompress: function decompress(data) {
+      if (data == null || data.length === 0) {
+        return '';
+      }
+
+      var result = '';
+      var dict = {};
+      var code = this._codeStart + 1;
+      var codeMax = this._codeStart;
+      var i = 0;
+      var len = data.length;
+      var c, ch, prev, buffer;
+
+      if (len > 0) {
+        c = data.charCodeAt(i++);
+        ch = fromCharCode(c);
+        result += ch;
+        prev = ch;
+      }
+
+      while (i < len) {
+        c = data.charCodeAt(i++);
+
+        if (c <= codeMax) {
+          buffer = fromCharCode(c);
+        } else {
+          if (hasOwnProperty.call(dict, c)) {
+            buffer = dict[c];
+          } else {
+            buffer = prev + ch;
+          }
+        }
+
+        result += buffer;
+        ch = buffer.charAt(0);
+        dict[code++] = prev + ch;
+        prev = buffer;
+      }
+
+      return result;
+    }
+  }; // LZJS Compression
+
+  function LZJS(options) {
+    this._init(options);
+  }
+
+  LZJS.prototype = {
+    _init: function _init(options) {
+      options = options || {}; //TODO: Validate utf-8 encoding for command line.
+
+      this._encoding = options.encoding || 'utf-8';
+    },
+    compress: function compress(data) {
+      if (data == null || data.length === 0) {
+        return '';
+      }
+
+      data = '' + data;
+      var result = '';
+      var dataBytes = byteLength(data);
+      var asciiLimitBytes = dataBytes * 0.9 | 0;
+      var len = data.length;
+      var options = {
+        maxBytes: dataBytes
+      };
+      var type;
+
+      if (dataBytes === len) {
+        // Ascii string [U+0000 - U+007F]
+        type = 'W';
+        options.codeStart = 0x7f;
+        options.codeMax = 0x7ff;
+        result = new LZW(options).compress(data);
+
+        if (result === false) {
+          type = 'S';
+          result = new LZSSCompressor(options).compress(data);
+
+          if (result === false) {
+            type = 'N';
+            result = data;
+          }
+        }
+      } else if (dataBytes > len && asciiLimitBytes < len) {
+        // String that is included most of the ASCII.
+        type = 'U';
+        result = new LZW(options).compress(toUTF8(data));
+
+        if (result === false) {
+          type = 'S';
+          result = new LZSSCompressor(options).compress(data);
+
+          if (result === false) {
+            type = 'N';
+            result = data;
+          }
+        }
+      } else {
+        // Unicode string
+        type = 'S';
+        result = new LZSSCompressor(options).compress(data);
+
+        if (result === false) {
+          type = 'U';
+          result = new LZW(options).compress(toUTF8(data));
+
+          if (result === false || byteLength(result) > dataBytes) {
+            type = 'N';
+            result = data;
+          }
+        }
+      }
+
+      return type + result;
+    },
+    decompress: function decompress(data) {
+      if (data == null || data.length === 0) {
+        return '';
+      }
+
+      data = '' + data;
+      var type = data.charAt(0);
+
+      switch (type) {
+        case 'S':
+          return this._decompressByS(data.substring(1));
+
+        case 'W':
+          return this._decompressByW(data.substring(1));
+
+        case 'U':
+          return this._decompressByU(data.substring(1));
+
+        case 'N':
+          return this._decompressByN(data.substring(1));
+
+        default:
+          return data;
+      }
+    },
+    _decompressByS: function _decompressByS(data) {
+      return new LZSSDecompressor().decompress(data);
+    },
+    _decompressByW: function _decompressByW(data) {
+      var options = {
+        codeStart: 0x7f,
+        codeMax: 0x7ff
+      };
+      return new LZW(options).decompress(data);
+    },
+    _decompressByU: function _decompressByU(data) {
+      return toUTF16(new LZW().decompress(data));
+    },
+    _decompressByN: function _decompressByN(data) {
+      return data;
+    }
+  }; // Create Sliding window
+
+  function createWindow() {
+    var alpha = 'abcdefghijklmnopqrstuvwxyz';
+    var win = '';
+    var len = alpha.length;
+    var i, j, c, c2;
+
+    for (i = 0; i < len; i++) {
+      c = alpha.charAt(i);
+
+      for (j = len - 1; j > 15 && win.length < WINDOW_MAX; j--) {
+        c2 = alpha.charAt(j);
+        win += ' ' + c + ' ' + c2;
+      }
+    }
+
+    while (win.length < WINDOW_MAX) {
+      win = ' ' + win;
+    }
+
+    win = win.slice(0, WINDOW_MAX);
+    return win;
+  }
+
+  function truncateBuffer(buffer, length) {
+    if (buffer.length === length) {
+      return buffer;
+    }
+
+    if (buffer.subarray) {
+      return buffer.subarray(0, length);
+    }
+
+    buffer.length = length;
+    return buffer;
+  }
+
+  function bufferToString_fast(buffer, length) {
+    if (length == null) {
+      length = buffer.length;
+    } else {
+      buffer = truncateBuffer(buffer, length);
+    }
+
+    if (CAN_CHARCODE_APPLY && CAN_CHARCODE_APPLY_TYPED) {
+      if (length < APPLY_BUFFER_SIZE) {
+        if (APPLY_BUFFER_SIZE_OK) {
+          return fromCharCode.apply(null, buffer);
+        }
+
+        if (APPLY_BUFFER_SIZE_OK === null) {
+          try {
+            var s = fromCharCode.apply(null, buffer);
+
+            if (length > APPLY_BUFFER_SIZE) {
+              APPLY_BUFFER_SIZE_OK = true;
+            }
+
+            return s;
+          } catch (e) {
+            // Ignore RangeError: arguments too large
+            APPLY_BUFFER_SIZE_OK = false;
+          }
+        }
+      }
+    }
+
+    return bufferToString_chunked(buffer);
+  }
+
+  function bufferToString_chunked(buffer) {
+    var string = '';
+    var length = buffer.length;
+    var i = 0;
+    var sub;
+
+    while (i < length) {
+      if (buffer.subarray) {
+        sub = buffer.subarray(i, i + APPLY_BUFFER_SIZE);
+      } else {
+        sub = buffer.slice(i, i + APPLY_BUFFER_SIZE);
+      }
+
+      i += APPLY_BUFFER_SIZE;
+
+      if (APPLY_BUFFER_SIZE_OK) {
+        string += fromCharCode.apply(null, sub);
+        continue;
+      }
+
+      if (APPLY_BUFFER_SIZE_OK === null) {
+        try {
+          string += fromCharCode.apply(null, sub);
+
+          if (sub.length > APPLY_BUFFER_SIZE) {
+            APPLY_BUFFER_SIZE_OK = true;
+          }
+
+          continue;
+        } catch (e) {
+          APPLY_BUFFER_SIZE_OK = false;
+        }
+      }
+
+      return bufferToString_slow(buffer);
+    }
+
+    return string;
+  }
+
+  function bufferToString_slow(buffer) {
+    var string = '';
+    var length = buffer.length;
+
+    for (var i = 0; i < length; i++) {
+      string += fromCharCode(buffer[i]);
+    }
+
+    return string;
+  }
+
+  function stringToBuffer(string) {
+    var length = string.length;
+    var buffer = createBuffer(16, length);
+
+    for (var i = 0; i < length; i++) {
+      buffer[i] = string.charCodeAt(i);
+    }
+
+    return buffer;
+  }
+
+  function createBuffer(bits, size) {
+    if (!HAS_TYPED) {
+      return new Array(size);
+    }
+
+    switch (bits) {
+      case 8:
+        return new Uint8Array(size);
+
+      case 16:
+        return new Uint16Array(size);
+    }
+  }
+
+  function stringToArray(string) {
+    var array = [];
+    var len = string && string.length;
+
+    for (var i = 0; i < len; i++) {
+      array[i] = string.charCodeAt(i);
+    }
+
+    return array;
+  } // UTF-16 to UTF-8
+
+
+  function toUTF8(data) {
+    var results = [];
+    var i = 0;
+    var len = data.length;
+    var c, second;
+
+    for (; i < len; i++) {
+      c = data.charCodeAt(i); // high surrogate
+
+      if (c >= 0xd800 && c <= 0xdbff && i + 1 < len) {
+        second = data.charCodeAt(i + 1); // low surrogate
+
+        if (second >= 0xdc00 && second <= 0xdfff) {
+          c = (c - 0xd800) * 0x400 + second - 0xdc00 + 0x10000;
+          i++;
+        }
+      }
+
+      if (c < 0x80) {
+        results[results.length] = c;
+      } else if (c < 0x800) {
+        results[results.length] = 0xc0 | c >> 6 & 0x1f;
+        results[results.length] = 0x80 | c & 0x3f;
+      } else if (c < 0x10000) {
+        results[results.length] = 0xe0 | c >> 12 & 0xf;
+        results[results.length] = 0x80 | c >> 6 & 0x3f;
+        results[results.length] = 0x80 | c & 0x3f;
+      } else if (c < 0x200000) {
+        results[results.length] = 0xf0 | c >> 18 & 0xf;
+        results[results.length] = 0x80 | c >> 12 & 0x3f;
+        results[results.length] = 0x80 | c >> 6 & 0x3f;
+        results[results.length] = 0x80 | c & 0x3f;
+      }
+    }
+
+    return bufferToString_fast(results);
+  } // UTF-8 to UTF-16
+
+
+  function toUTF16(data) {
+    var results = [];
+    var i = 0;
+    var len = data.length;
+    var n, c, c2, c3, c4, code;
+
+    while (i < len) {
+      c = data.charCodeAt(i++);
+      n = c >> 4;
+
+      if (n >= 0 && n <= 7) {
+        code = c;
+      } else if (n === 12 || n === 13) {
+        c2 = data.charCodeAt(i++);
+        code = (c & 0x1f) << 6 | c2 & 0x3f;
+      } else if (n === 14) {
+        c2 = data.charCodeAt(i++);
+        c3 = data.charCodeAt(i++);
+        code = (c & 0x0f) << 12 | (c2 & 0x3f) << 6 | c3 & 0x3f;
+      } else if (n === 15) {
+        c2 = data.charCodeAt(i++);
+        c3 = data.charCodeAt(i++);
+        c4 = data.charCodeAt(i++);
+        code = (c & 0x7) << 18 | (c2 & 0x3f) << 12 | (c3 & 0x3f) << 6 | c4 & 0x3f;
+      }
+
+      if (code <= 0xffff) {
+        results[results.length] = code;
+      } else {
+        // Split in surrogate halves
+        code -= 0x10000;
+        results[results.length] = (code >> 10) + 0xd800; // High surrogate
+
+        results[results.length] = code % 0x400 + 0xdc00; // Low surrogate
+      }
+    }
+
+    return bufferToString_fast(results);
+  } // UTF-8 byte length
+
+
+  function byteLength(data, encoding) {
+    var length = 0;
+    var c, c2;
+
+    for (var i = 0, len = data.length; i < len; i++) {
+      c = data.charCodeAt(i);
+
+      if ((c & 0xfc00) === 0xd800 && i + 1 < len) {
+        c2 = data.charCodeAt(i + 1);
+
+        if ((c2 & 0xfc00) === 0xdc00) {
+          c = 0x10000 + (c - 0xd800 << 10) + (c2 - 0xdc00);
+          i++;
+        }
+      }
+
+      if (c < 0x80) {
+        length++;
+      } else if (c < 0x800) {
+        length += 2;
+      } else if (c < 0x10000) {
+        length += 3;
+      } else {
+        length += 4;
+      }
+    }
+
+    return length;
+  } // via http://www.onicos.com/staff/iz/amuse/javascript/expert/base64.txt
+
+
+  var base64EncodeChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  var base64DecodeChars = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1];
+
+  function base64encode(str) {
+    var out, i, len;
+    var c1, c2, c3;
+    len = str.length;
+    i = 0;
+    out = '';
+
+    while (i < len) {
+      c1 = str.charCodeAt(i++) & 0xff;
+
+      if (i === len) {
+        out += base64EncodeChars.charAt(c1 >> 2) + base64EncodeChars.charAt((c1 & 0x3) << 4) + '==';
+        break;
+      }
+
+      c2 = str.charCodeAt(i++);
+
+      if (i === len) {
+        out += base64EncodeChars.charAt(c1 >> 2) + base64EncodeChars.charAt((c1 & 0x3) << 4 | (c2 & 0xf0) >> 4) + base64EncodeChars.charAt((c2 & 0xf) << 2) + '=';
+        break;
+      }
+
+      c3 = str.charCodeAt(i++);
+      out += base64EncodeChars.charAt(c1 >> 2) + base64EncodeChars.charAt((c1 & 0x3) << 4 | (c2 & 0xf0) >> 4) + base64EncodeChars.charAt((c2 & 0xf) << 2 | (c3 & 0xc0) >> 6) + base64EncodeChars.charAt(c3 & 0x3f);
+    }
+
+    return out;
+  }
+
+  function base64decode(str) {
+    var c1, c2, c3, c4;
+    var i, len, out;
+    len = str.length;
+    i = 0;
+    out = '';
+
+    while (i < len) {
+      do {
+        c1 = base64DecodeChars[str.charCodeAt(i++) & 0xff];
+      } while (i < len && c1 === -1);
+
+      if (c1 === -1) {
+        break;
+      }
+
+      do {
+        c2 = base64DecodeChars[str.charCodeAt(i++) & 0xff];
+      } while (i < len && c2 === -1);
+
+      if (c2 === -1) {
+        break;
+      }
+
+      out += fromCharCode(c1 << 2 | (c2 & 0x30) >> 4);
+
+      do {
+        c3 = str.charCodeAt(i++) & 0xff;
+
+        if (c3 === 61) {
+          return out;
+        }
+
+        c3 = base64DecodeChars[c3];
+      } while (i < len && c3 === -1);
+
+      if (c3 === -1) {
+        break;
+      }
+
+      out += fromCharCode((c2 & 0xf) << 4 | (c3 & 0x3c) >> 2);
+
+      do {
+        c4 = str.charCodeAt(i++) & 0xff;
+
+        if (c4 === 61) {
+          return out;
+        }
+
+        c4 = base64DecodeChars[c4];
+      } while (i < len && c4 === -1);
+
+      if (c4 === -1) {
+        break;
+      }
+
+      out += fromCharCode((c3 & 0x03) << 6 | c4);
+    }
+
+    return out;
+  }
+  /**
+   * @name lzjs
+   * @type {Object}
+   * @public
+   * @class
+   */
+
+
+  var lzjs = {
+    /**
+     * @lends lzjs
+     */
+
+    /**
+     * Compress data.
+     *
+     * @param {string|Buffer} data Input data
+     * @param {Object=} [options] Options
+     * @return {string} Compressed data
+     */
+    compress: function compress(data, options) {
+      return new LZJS(options).compress(data);
+    },
+
+    /**
+     * Decompress data.
+     *
+     * @param {string} data Input data
+     * @param {Object=} [options] Options
+     * @return {string} Decompressed data
+     */
+    decompress: function decompress(data, options) {
+      return new LZJS(options).decompress(data);
+    },
+
+    /**
+     * Compress data to base64 string.
+     *
+     * @param {string|Buffer} data Input data
+     * @param {Object=} [options] Options
+     * @return {string} Compressed data
+     */
+    compressToBase64: function compressToBase64(data, options) {
+      return base64encode(toUTF8(new LZJS(options).compress(data)));
+    },
+
+    /**
+     * Decompress data from base64 string.
+     *
+     * @param {string} data Input data
+     * @param {Object=} [options] Options
+     * @return {string} Decompressed data
+     */
+    decompressFromBase64: function decompressFromBase64(data, options) {
+      return new LZJS(options).decompress(toUTF16(base64decode(data)));
+    }
+  };
+  return lzjs;
+});
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
 
 __webpack_require__(2);
 
-__webpack_require__(4);
+__webpack_require__(3);
 
-__webpack_require__(11);
+__webpack_require__(5);
 
 __webpack_require__(12);
 
@@ -84,25 +1248,31 @@ __webpack_require__(13);
 
 __webpack_require__(14);
 
+__webpack_require__(15);
+
 __webpack_require__(16);
 
+__webpack_require__(17);
+
+__webpack_require__(19);
+
 /***/ }),
-/* 1 */
+/* 2 */
 /***/ (function(module, exports) {
 
 // removed by extract-text-webpack-plugin
 
 /***/ }),
-/* 2 */
+/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-__webpack_require__(3);
+__webpack_require__(4);
 
 /***/ }),
-/* 3 */
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -516,13 +1686,11 @@ function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterat
 }]);
 
 /***/ }),
-/* 4 */
+/* 5 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
-
-__webpack_require__(5);
 
 __webpack_require__(6);
 
@@ -534,32 +1702,34 @@ __webpack_require__(9);
 
 __webpack_require__(10);
 
-/***/ }),
-/* 5 */
-/***/ (function(module, exports, __webpack_require__) {
-
-module.exports = __webpack_require__.p + "fonts/e1-icon.eot";
+__webpack_require__(11);
 
 /***/ }),
 /* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__.p + "fonts/e1-icon.svg";
+module.exports = __webpack_require__.p + "fonts/e1-icon.eot";
 
 /***/ }),
 /* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__.p + "fonts/e1-icon.ttf";
+module.exports = __webpack_require__.p + "fonts/e1-icon.svg";
 
 /***/ }),
 /* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__.p + "fonts/e1-icon.woff";
+module.exports = __webpack_require__.p + "fonts/e1-icon.ttf";
 
 /***/ }),
 /* 9 */
+/***/ (function(module, exports, __webpack_require__) {
+
+module.exports = __webpack_require__.p + "fonts/e1-icon.woff";
+
+/***/ }),
+/* 10 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -953,8 +2123,8 @@ var e1jsComponents = function (t) {
         Y = l.DataView,
         J = A(0),
         K = A(2),
-        Q = A(3),
-        $ = A(4),
+        $ = A(3),
+        Q = A(4),
         tt = A(5),
         et = A(6),
         nt = O(!0),
@@ -1061,7 +2231,7 @@ var e1jsComponents = function (t) {
         return j.call(Et(this), t, e, arguments.length > 2 ? arguments[2] : void 0);
       },
       every: function every(t) {
-        return $(Et(this), t, arguments.length > 1 ? arguments[1] : void 0);
+        return Q(Et(this), t, arguments.length > 1 ? arguments[1] : void 0);
       },
       fill: function fill(t) {
         return R.apply(Et(this), arguments);
@@ -1107,7 +2277,7 @@ var e1jsComponents = function (t) {
         return e;
       },
       some: function some(t) {
-        return Q(Et(this), t, arguments.length > 1 ? arguments[1] : void 0);
+        return $(Et(this), t, arguments.length > 1 ? arguments[1] : void 0);
       },
       sort: function sort(t) {
         return ht.call(Et(this), t);
@@ -3351,13 +4521,13 @@ var e1jsComponents = function (t) {
     var e = H.call(this, t = k(t, !0));
     return !(this === D && o(j, t) && !o(W, t)) && (!(e || !o(this, t) || !o(j, t) || o(this, N) && this[N][t]) || e);
   },
-      Q = function Q(t, e) {
+      $ = function $(t, e) {
     if (t = x(t), e = k(e, !0), t !== D || !o(j, e) || o(W, e)) {
       var n = T(t, e);
       return !n || !o(j, e) || o(t, N) && t[N][e] || (n.enumerable = !0), n;
     }
   },
-      $ = function $(t) {
+      Q = function Q(t) {
     for (var e, n = A(x(t)), i = [], r = 0; n.length > r;) {
       o(j, e = n[r++]) || e == N || e == l || i.push(e);
     }
@@ -3386,7 +4556,7 @@ var e1jsComponents = function (t) {
     }), Z(t);
   }, c(_O2.prototype, "toString", function () {
     return this._k;
-  }), E.f = Q, L.f = X, n(37).f = M.f = $, n(47).f = K, n(51).f = tt, s && !n(33) && c(D, "propertyIsEnumerable", K, !0), v.f = function (t) {
+  }), E.f = $, L.f = X, n(37).f = M.f = Q, n(47).f = K, n(51).f = tt, s && !n(33) && c(D, "propertyIsEnumerable", K, !0), v.f = function (t) {
     return Z(d(t));
   }), a(a.G + a.W + a.F * !q, {
     Symbol: _O2
@@ -3421,8 +4591,8 @@ var e1jsComponents = function (t) {
     create: J,
     defineProperty: X,
     defineProperties: Y,
-    getOwnPropertyDescriptor: Q,
-    getOwnPropertyNames: $,
+    getOwnPropertyDescriptor: $,
+    getOwnPropertyNames: Q,
     getOwnPropertySymbols: tt
   }), F && a(a.S + a.F * (!q || u(function () {
     var t = _O2();
@@ -7766,7 +8936,7 @@ var e1jsComponents = function (t) {
       a = window.E1,
       c = function () {
     function t(e) {
-      i(this, t), this.el = e, this.update = this.update, this.data = {}, this.el.appendChild(a.cleanHtml('<span class="image-renderer loading"></span>')), this.update();
+      i(this, t), this.el = e, this.update = this.update, this.data = {}, this.el.appendChild(a.cleanHtml('<span class="image-renderer-outer"><span class="image-renderer loading"></span></span>')), this.update();
     }
 
     return o(t, [{
@@ -7778,7 +8948,8 @@ var e1jsComponents = function (t) {
           preview: a.getModel(this.el, "preview") || void 0,
           type: a.getModel(this.el, "type") || void 0,
           crop: a.getModel(this.el, "crop") || void 0,
-          element: this.el.querySelector(".image-renderer")
+          element: this.el.querySelector(".image-renderer"),
+          wrapper: this.el
         };
         e.url === this.data.url && e.preview === this.data.preview && e.type === this.data.type && e.crop === this.data.crop || e.url && (this.data = e, this.el.renderer && this.el.renderer.destroy(), this.el.renderer = new s.default(e), this.el.takeScreenshot = function () {
           return t.el.renderer.data.cropper.takeScreenshot();
@@ -7862,13 +9033,13 @@ var e1jsComponents = function (t) {
     }, {
       key: "exitFullscreen",
       value: function value() {
-        this.data.element.parentNode.classList.remove("fullscreen"), window.document.exitFullscreen ? window.document.exitFullscreen() : window.document.webkitExitFullscreen ? window.document.webkitExitFullscreen() : window.document.mozCancelFullScreen ? window.document.mozCancelFullScreen() : window.document.msExitFullscreen && window.document.msExitFullscreen();
+        this.data.wrapper.classList.remove("fullscreen"), window.document.exitFullscreen ? window.document.exitFullscreen() : window.document.webkitExitFullscreen ? window.document.webkitExitFullscreen() : window.document.mozCancelFullScreen ? window.document.mozCancelFullScreen() : window.document.msExitFullscreen && window.document.msExitFullscreen();
       }
     }, {
       key: "enterFullscreen",
       value: function value() {
-        var t = this.data.element;
-        t.parentNode.classList.add("fullscreen"), t.requestFullscreen ? t.requestFullscreen() : t.webkitRequestFullscreen ? t.webkitRequestFullscreen() : t.mozRequestFullScreen ? t.mozRequestFullScreen() : t.msRequestFullscreen && t.msRequestFullscreen();
+        var t = this.data.wrapper;
+        t.classList.add("fullscreen"), t.requestFullscreen ? t.requestFullscreen() : t.webkitRequestFullscreen ? t.webkitRequestFullscreen() : t.mozRequestFullScreen ? t.mozRequestFullScreen() : t.msRequestFullscreen && t.msRequestFullscreen();
       }
     }, {
       key: "toggleFullscreen",
@@ -8002,16 +9173,7 @@ var e1jsComponents = function (t) {
       key: "doZoom",
       value: function value(t, e) {
         t /= 2;
-
-        for (var n = 4; n--;) {
-          e.zoomQueue.push(t / 8);
-        }
-
-        !function t() {
-          window.requestAnimationFrame(function () {
-            e.zoomQueue.length && (e.setZoom(e.zoomQueue.shift()), e.setTransforms(), t());
-          });
-        }();
+        e.setZoom(t), e.setTransforms();
       }
     }, {
       key: "toggleVr",
@@ -8586,15 +9748,18 @@ var e1jsComponents = function (t) {
     }, {
       key: "setPositions",
       value: function value(t, e, n, i, r) {
-        var o = window.document.getElementById("maskInner"),
-            s = window.document.getElementById("maskUpper");
+        var o = window.document.getElementById("crop-positioner"),
+            s = window.document.querySelector("#crop-positioner svg"),
+            a = window.document.getElementById("maskInner"),
+            c = window.document.getElementById("maskUpper"),
+            l = window.document.getElementById("maskLower");
 
-        if (o || s) {
-          var a = {
+        if (a || !(!c & !l)) {
+          var u = {
             width: this.container.offsetWidth,
             height: this.container.offsetHeight
           };
-          t || (t = this.positions.x), e || (e = this.positions.y), n || (n = this.positions.w), i || (i = this.positions.h), t < 0 && (t = 0), n + t > a.width && (n = a.width - t), n < this.minWidth && (n = this.minWidth, t = this.positions.x), e < 0 && (e = 0), i + e > a.height && (i = a.height - e), i < this.minHeight && (i = this.minHeight, e = this.positions.y), r && (n + t > a.width && (t = a.width - this.minWidth), i + e > a.height && (e = a.height - this.minHeight)), this.positions.x = t, this.positions.y = e, this.positions.w = n, this.positions.h = i, o && (o.setAttribute("x", t), o.setAttribute("y", e), o.setAttribute("width", n), o.setAttribute("height", i)), s && (s.setAttribute("x", t), s.setAttribute("y", e), s.setAttribute("width", n), s.setAttribute("height", i));
+          t || (t = this.positions.x), e || (e = this.positions.y), n || (n = this.positions.w), i || (i = this.positions.h), t < 0 && (t = 0), n + t > u.width && (n = u.width - t), n < this.minWidth && (n = this.minWidth, t = this.positions.x), e < 0 && (e = 0), i + e > u.height && (i = u.height - e), i < this.minHeight && (i = this.minHeight, e = this.positions.y), r && (n + t > u.width && (t = u.width - this.minWidth), i + e > u.height && (e = u.height - this.minHeight)), this.positions.x = t, this.positions.y = e, this.positions.w = n, this.positions.h = i, a && (a.setAttribute("x", t), a.setAttribute("y", e), a.setAttribute("width", n), a.setAttribute("height", i)), c && (c.setAttribute("x", t), c.setAttribute("y", e), c.setAttribute("width", n), c.setAttribute("height", i)), o && s & l && (l.style.width = s.style.width = Math.ceil(o.offsetWidth), l.style.height = s.style.height = Math.ceil(o.offsetHeight));
         }
       }
     }, {
@@ -8607,7 +9772,7 @@ var e1jsComponents = function (t) {
 
   t.exports = s;
 }, function (t, e) {
-  t.exports = '<svg width="100%" height="100%">\n    <defs>\n        <mask id="Mask" width="375" height="200">\n            <rect x="0" y="0" width="100%" height="100%" style="fill: white;"></rect>\n            <rect x="0" y="0" width="375" height="200" style="fill: black;" id="maskInner"></rect>\n        </mask>\n    </defs>\n    <rect width="100%" height="100%" style="fill:black;fill-opacity: .75;" mask="url(#Mask)"></rect>\n    <rect x="0" y="0" width="375" height="200" style="fill: transparent;stroke: #aaa;stroke-width: 2px;stroke-dasharray: 4;pointer-events: all !important;" id="maskUpper"></rect>\n</svg>';
+  t.exports = '<svg width="100%" height="100%">\n    <defs>\n        <mask id="Mask" width="375" height="200">\n            <rect x="0" y="0" width="100%" height="100%" style="fill: white;" id="maskLower"></rect>\n            <rect x="0" y="0" width="375" height="200" style="fill: black;" id="maskInner"></rect>\n        </mask>\n    </defs>\n    <rect width="100%" height="100%" style="fill:black;fill-opacity: .75;" mask="url(#Mask)"></rect>\n    <rect x="0" y="0" width="375" height="200" style="fill: transparent;stroke: #aaa;stroke-width: 2px;stroke-dasharray: 4;pointer-events: all !important;" id="maskUpper"></rect>\n</svg>';
 }, function (t, e) {}, function (t, e, n) {
   n(397), n(399);
 }, function (t, e, n) {
@@ -9352,13 +10517,13 @@ var e1jsComponents = function (t) {
 }, function (t, e) {}]).umd;
 
 /***/ }),
-/* 10 */
+/* 11 */
 /***/ (function(module, exports) {
 
 // removed by extract-text-webpack-plugin
 
 /***/ }),
-/* 11 */
+/* 12 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -9392,7 +10557,7 @@ function () {
 E1.registerService("TranslateService", new TranslateService());
 
 /***/ }),
-/* 12 */
+/* 13 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -9412,7 +10577,7 @@ var MessageService = function MessageService() {
 E1.registerService("MessageService", new MessageService());
 
 /***/ }),
-/* 13 */
+/* 14 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -9581,13 +10746,370 @@ function () {
 E1.registerService("ValidatorService", new ValidatorService());
 
 /***/ }),
-/* 14 */
+/* 15 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var _uploader = _interopRequireDefault(__webpack_require__(15));
+var _lzjs = _interopRequireDefault(__webpack_require__(0));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+var E1 = window.E1;
+
+var RequestService =
+/*#__PURE__*/
+function () {
+  function RequestService() {
+    var _this = this;
+
+    _classCallCheck(this, RequestService);
+
+    this.abbrevKeys = ["c", "a", "act", "t", "p", "u", "g", "o", "s", "i", "g", "link"];
+    this.fullKeys = ["category_id", "user_id", "user_activity_id", "tabValue", "page", "uid", "game_id", "orderBy", "search_in_fields", "image_id", "id", "link"];
+    this.states = [];
+    window.addEventListener('popstate', function (e) {
+      _this.states.pop();
+    });
+  }
+
+  _createClass(RequestService, [{
+    key: "mapKey",
+    value: function mapKey(key, source, target) {
+      var index = source.indexOf(key);
+      return target[index];
+    }
+  }, {
+    key: "mapKeys",
+    value: function mapKeys(keyedData, source, target) {
+      var _this2 = this;
+
+      var results = null;
+      var keys = Object.keys(keyedData);
+
+      if (keys.length) {
+        results = {};
+        keys.forEach(function (key) {
+          var _key = _this2.mapKey(key, source, target);
+
+          if (_key) {
+            results[_key] = keyedData[key];
+          }
+        });
+      }
+
+      return results;
+    }
+  }, {
+    key: "getQuery",
+    value: function getQuery() {
+      var search = window.location.search;
+      var results = {};
+
+      if (!search) {
+        return results;
+      }
+
+      search = search.substr(1).split("&");
+      search.forEach(function (s) {
+        var key = s.split("=").shift();
+        var val = s.split(key + "=")[1];
+
+        if (val && val !== "undefined" && val !== "") {
+          results[key] = val;
+        }
+      });
+
+      if (results.m) {
+        try {
+          var str = results.m;
+          str = decodeURIComponent(str);
+
+          var _results = this.mapKeys(JSON.parse(_lzjs.default.decompressFromBase64(str)), this.abbrevKeys, this.fullKeys);
+
+          delete results.m;
+          results = Object.assign(_results ? _results : {}, results);
+        } catch (e) {}
+      }
+
+      return this.clearEmptyQuery(results);
+    }
+  }, {
+    key: "clearEmptyQuery",
+    value: function clearEmptyQuery(query) {
+      if (!query) {
+        return {};
+      }
+
+      for (var key in query) {
+        if (!query[key] || query[key] === "" || query[key] === "undefined" || query[key] === "null") {
+          delete query[key];
+        }
+      }
+
+      return query;
+    }
+  }, {
+    key: "setQuery",
+    value: function setQuery(data, push) {
+      var query = this.clearEmptyQuery(data);
+      var queryString = this.getQueryString(query);
+      var method = push ? "pushState" : "replaceState";
+      window.history[method](query, window.document.title, window.location.origin + window.location.pathname + queryString);
+
+      if (push) {
+        this.states.push(query);
+      } else {
+        this.states[this.states.length - 1] = query;
+      }
+    }
+  }, {
+    key: "getQueryParam",
+    value: function getQueryParam(key) {
+      return this.getQuery()[key];
+    }
+  }, {
+    key: "setQueryParam",
+    value: function setQueryParam(key, data, push) {
+      var query = this.getQuery();
+      query[key] = data;
+      query = this.clearEmptyQuery(query);
+      this.setQuery(query, push);
+    }
+  }, {
+    key: "getQueryString",
+    value: function getQueryString(data) {
+      data = data ? data : this.getQuery();
+      var extraParamsString = "";
+
+      for (var p in data) {
+        if (data[p]) {
+          if (this.fullKeys.indexOf(p) === -1) {
+            extraParamsString += "&".concat(p, "=").concat(data[p]);
+            delete data[p];
+          }
+        }
+      }
+
+      var results = this.mapKeys(data, this.fullKeys, this.abbrevKeys);
+      results = results ? results : {};
+      return "?m=".concat(encodeURIComponent(_lzjs.default.compressToBase64(JSON.stringify(results)))).concat(extraParamsString);
+    }
+  }, {
+    key: "getUnencryptedQueryString",
+    value: function getUnencryptedQueryString(data) {
+      var query = data || this.getQuery();
+      var queryString = "?";
+
+      for (var q in query) {
+        if (query[q]) {
+          queryString += q + "=" + query[q] + "&";
+        }
+      }
+
+      queryString = queryString.split("");
+      queryString.pop();
+      return queryString.join("");
+    }
+  }, {
+    key: "processPath",
+    value: function processPath(path) {
+      if (window.location.host.indexOf("localhost") > -1) {
+        path = window.encodeURIComponent(path);
+      }
+
+      return path;
+    }
+  }, {
+    key: "request",
+    value: function request(url, method, data) {
+      return new window.Promise(function (resolve, reject) {
+        if (url.indexOf("?") === -1) {
+          url = "".concat(url, "?CT=").concat(new Date().getTime());
+        } else {
+          url = "".concat(url, "&CT=").concat(new Date().getTime());
+        }
+
+        var req = new window.XMLHttpRequest();
+        req.open(method ? method : "GET", url);
+        req.withCredentials = false;
+
+        if (method === "DELETE" || method === "POST" || method === "PUT") {
+          if (!data) {
+            data = {};
+          }
+        }
+
+        if (data) {
+          var uid = E1.getModel(null, "@UserModels.currentUser.id");
+          var sess = E1.getModel(null, "@UserModels.currentUser.session");
+
+          if (uid) {
+            data.userId = E1.getModel(null, "@UserModels.currentUser.id");
+          }
+
+          if (uid) {
+            data.session = window.btoa(sess);
+          }
+
+          req.setRequestHeader("Content-type", "application/json");
+        } // req.setRequestHeader("Cache-Control", "no-cache")
+        // req.setRequestHeader("Pragma", "no-cache")
+        // req.setRequestHeader("Expires", "Sat, 01 Jan 2000 00:00:00 GMT")
+
+
+        req.onload = function (res) {
+          try {
+            res = JSON.parse(res.target.responseText);
+          } catch (error) {
+            res = res.target.responseText;
+          }
+
+          resolve(res);
+        };
+
+        req.onerror = function (err) {
+          reject(err);
+        };
+
+        req.send(data ? JSON.stringify(data) : undefined);
+      });
+    }
+  }]);
+
+  return RequestService;
+}();
+
+E1.registerService("RequestService", new RequestService());
+
+/***/ }),
+/* 16 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _lzjs = _interopRequireDefault(__webpack_require__(0));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+var E1 = window.E1;
+
+var UserService =
+/*#__PURE__*/
+function () {
+  function UserService() {
+    var _this = this;
+
+    _classCallCheck(this, UserService);
+
+    this.user = {};
+    this.isLoggedIn = false;
+    var query = E1.services.RequestService.getQuery();
+
+    if (query.login) {
+      window.localStorage.setItem("user", _lzjs.default.decompressFromBase64(query.login));
+      E1.services.RequestService.setQueryParam("login", "");
+    }
+
+    var user = window.localStorage.getItem("user");
+
+    if (user) {
+      user = JSON.parse(user);
+
+      if (new Date(user.userTokenExp).getTime() <= new Date().getTime()) {
+        window.localStorage.removeItem("user");
+        return;
+      }
+
+      if (new Date(user.sessionExp).getTime() <= new Date().getTime()) {
+        return this.getNewSessionToken(user.userToken).then(function (res) {
+          user.session = res.session;
+          user.sessionExp = new Date(res.sessionExp).getTime();
+          window.localStorage.setItem("user", JSON.stringify(user));
+          _this.user = user;
+          E1.setModel(null, "@UserService.user", user);
+          _this.isLoggedIn = true;
+          E1.setModel(null, "@UserService.isLoggedIn", true);
+        }).catch(function (res) {
+          window.localStorage.removeItem("user");
+        });
+      } else {
+        this.user = user;
+        E1.setModel(null, "@UserService.user", user);
+        this.isLoggedIn = true;
+        E1.setModel(null, "@UserService.isLoggedIn", true);
+      }
+
+      console.log(user);
+    }
+  }
+
+  _createClass(UserService, [{
+    key: "login",
+    value: function login() {
+      var returnUrl = "https://ansel.cklsylabs.com/users/jarvis/return";
+      var loginUrl = "https://accounts.nvgs.nvidia.com/api/1/oauth/authorize?response_type=code&scope=user_token&client_id=163900107807260888&redirect_uri=".concat(returnUrl, "&state=").concat(encodeURIComponent(window.location.href));
+      window.location.href = loginUrl;
+    }
+  }, {
+    key: "getNewSessionToken",
+    value: function getNewSessionToken(userToken) {
+      return new Promise(function (resolve, reject) {
+        var clientUrl = "https://accounts.nvgs.nvidia.com/api/1/authentication/client/login";
+        var x = new window.XMLHttpRequest();
+        x.open("POST", clientUrl, false);
+        x.setRequestHeader("Accept", "application/json");
+        x.setRequestHeader("Content-Type", "application/json");
+        x.setRequestHeader("Authorization", "Basic " + window.btoa(userToken + ":"));
+
+        x.onload = function () {
+          var res = JSON.parse(x.responseText);
+
+          if (res.error) {
+            return reject(res);
+          }
+
+          resolve({
+            session: res.sessionToken,
+            sessionExp: new Date(res.expiration).getTime()
+          });
+        };
+
+        x.send(JSON.stringify({
+          clientId: "163900107807260888",
+          deviceId: "MDAwNTlhM2M3YTAwNDA2ZjE0OTY1NmU2OTZjNjU3NDZl"
+        }));
+      });
+    }
+  }]);
+
+  return UserService;
+}();
+
+E1.registerService("UserService", new UserService());
+
+/***/ }),
+/* 17 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var _uploader = _interopRequireDefault(__webpack_require__(18));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -9610,8 +11132,6 @@ function () {
     this.title = "";
     this.content = "\n        <div class=\"upload-content\">\n            <div style=\"width:50px;\"><e1-icon type=\"upload\"><e1-icon></div>\n            <div><span>Drag and drop your image here</span>,<br><span>or</span></div>\n            <div><button class=\"btn\">Browse</button></div>\n        </div>";
     this.uploadPane = "\n            <div style=\"display:none;\" id=\"showUploadProgress\">\n                <div id=\"uploading-progress\">\n                    <div id=\"count\"></div>\n                    <div class=\"progress\" id=\"progressBar\"></div>\n                    <button id=\"cancelProgress\" class=\"btn\" onclick=\"E1.services.UploadService.cancel()\">Cancel</button>\n                </div>\n            </div>\n            <div id=\"upload-pane\">\n                <div class=\"upload-pane-inner\">\n                    <div class=\"upload-viewer\">\n                        <div class=\"img-container-outer\">\n                            <div id=\"imgContainer\">\n                                <e1-image-viewer id=\"uploadViewer\" image-ready=\"@UploadService.uploadImgReady()\" url=\"@UploadService.image.image\" type=\"@UploadService.image.renderer\" crop=\"true\"></e1-image-viewer>\n                            </div>\n                        </div>\n                    </div>\n                    <div style=\"display:none;\" e1-show=\"@UploadService.imageReady\">\n                        <div class=\"inputs\">\n                            <div id=\"upload-title\">\n                                <label for=\"shot-title\" class=\"required\" style=\"display: block;\">Title</label>\n                                <input id=\"shot-title\" e1-value=\"@UploadService.title\" type=\"text\" onkeyup=\"E1.services.UploadService.uploadKeyPress(event)\" />\n                            </div>\n                            <div class=\"buttons\">\n                                <button onclick=\"E1.services.UploadService.upload()\" class=\"btn upload-result\" style=\"margin: 0px 3px;\">UPLOAD</button>\n                                <button class=\"btn secondary-btn upload-cancel\" onclick=\"window.location.reload()\">Cancel</button>\n                            </div>\n                        </div>\n                    </div>\n                </div>\n            </div>\n        ";
-    this.userId = window.localStorage.getItem("userId");
-    this.session = window.localStorage.getItem("session");
     this.type = null;
     this.showUploadProgress = false;
     this.progress = "0%";
@@ -9621,12 +11141,6 @@ function () {
       image: null,
       renderer: null
     };
-    E1.subscribe("@UploadService.userId", function (userId) {
-      window.localStorage.setItem("userId", userId);
-    });
-    E1.subscribe("@UploadService.session", function (session) {
-      window.localStorage.setItem("session", session);
-    });
   }
 
   _createClass(UploadService, [{
@@ -9688,7 +11202,7 @@ function () {
         type: renderer.renderer.is3D ? "3d" : false
       };
       var title = window.encodeURIComponent(E1.getModel(null, "@UploadService.title").replace(/<script|&lt;script/ig, "").trim());
-      this.uploader = new _uploader.default(self.file, title, this.userId, this.session, cropOptions, function (progress) {
+      this.uploader = new _uploader.default(self.file, title, E1.services.UserService.user.id, E1.services.UserService.user.session, cropOptions, function (progress) {
         window.document.getElementById("count").textContent = "".concat(progress, "%");
         window.document.getElementById("progressBar").style.width = "".concat(progress, "%");
       });
@@ -9793,7 +11307,7 @@ self = new UploadService();
 E1.registerService("UploadService", self);
 
 /***/ }),
-/* 15 */
+/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10020,7 +11534,7 @@ function () {
 module.exports = Uploader;
 
 /***/ }),
-/* 16 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";

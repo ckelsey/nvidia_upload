@@ -6,16 +6,11 @@
 </head>
 
 <body>
+	<div style="display: none; text-align: center; padding: 42px;" e1-show='@UserService.isLoggedIn === false'>
+		<button class="btn" onclick="E1.services.UserService.login()">Login</button>
+	</div>
 
-	<div id="upload-modal">
-		<div class="text">
-			<label style="display: block;">User ID</label>
-			<input style="display: block;width: 100%;max-width: 100%;" type="text" e1-value="@UploadService.userId">
-		</div>
-		<div class="text">
-			<label style="display: block;">Session token</label>
-			<input style="display: block;width: 100%;max-width: 100%;" type="text" e1-value="@UploadService.session">
-		</div>
+	<div id="upload-modal" style="display: none;" e1-show="@UserService.isLoggedIn === true">
 		<div class="text">
 			<span>Upload your NVIDIA Ansel screenshot below</span>
 		</div>
