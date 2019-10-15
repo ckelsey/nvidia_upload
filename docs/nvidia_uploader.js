@@ -11053,8 +11053,6 @@ function () {
         this.isLoggedIn = true;
         E1.setModel(null, "@UserService.isLoggedIn", true);
       }
-
-      console.log(user);
     }
   }
 
